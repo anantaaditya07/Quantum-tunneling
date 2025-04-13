@@ -1,0 +1,128 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import tkinter as tk
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+L = 2
+U = 5
+barrier_width = 2
+m = 1
+hbar = 1
+E_levels = [1, 2, 3, 4, 5]
+current_level = 0
+x = np.linspace(-10, 10, 1000)
+t_vals = np.linspace(0, 2 * np.pi, 100)
+
+def compute_wave(E):
+    k1 = np.sqrt(2 * m * E) / hbar
+    if E > U:
+        k2 = np.sqrt(2 * m * (E - U)) / hbar
+    else:
+        k2 = 1j * np.sqrt(2 * m * (U - E)) / hbar
+    T = np.exp(-2 * np.abs(k2) * barrier_width)
+    return k1, k2, T
+
+def wave_function(x, k, t, shift=0):
+    return np.exp(-(x + shift) ** 2) * np.exp(1j * (k * x - t))
+
+def update_wave(frame):
+    global current_level
+    t = t_vals[frame]
+    ax.clear()
+
+    if current_level == -1:
+        ax.set_title("No Tunneling (Neutral State)")
+        ax.set_ylim(-1, 6)
+        ax.set_xlim(-10, 10)
+        ax.set_xlabel("Position (x)")
+        ax.set_ylabel("Wave Amplitude / Potential")
+        canvas.draw()
+        return
+
+    E = E_levels[current_level]
+    k1, k2, T = compute_wave(E)
+
+    left_bound = -barrier_width / 2
+    right_bound = barrier_width / 2
+
+    psi1 = wave_function(x[x < left_bound], k1, t, shift=5)
+    psi2 = T * wave_function(x[(x >= left_bound) & (x <= right_bound)], k2, t)
+    psi3 = T * wave_function(x[x > right_bound], k1, t, shift=-5)
+    psi_reflected = 0.5 * np.exp(-(x[x < left_bound] + 5) ** 2) * np.exp(-1j * (k1 * x[x < left_bound] - t))
+
+    ax.plot(x[x < left_bound], np.real(psi1 + psi_reflected), label="Incoming + Reflected Wave", color="blue")
+    ax.plot(x[(x >= left_bound) & (x <= right_bound)], np.real(psi2), label="Wave Inside Barrier", color="green")
+    ax.plot(x[x > right_bound], np.real(psi3), label="Transmitted Wave", color="red")
+    ax.plot(x, np.where((x > left_bound) & (x < right_bound), U, 0), label="Potential Barrier", color="black", linestyle="dashed")
+
+    for x_pos in np.linspace(-9, left_bound - 1, 3):
+        ax.annotate("", xy=(x_pos + 0.5, np.real(psi1).max()), xytext=(x_pos, np.real(psi1).max()), arrowprops=dict(facecolor='blue', arrowstyle='->'))
+    for x_pos in np.linspace(left_bound + 1, right_bound - 1, 3):
+        ax.annotate("", xy=(x_pos + 0.5, np.real(psi2).max()), xytext=(x_pos, np.real(psi2).max()), arrowprops=dict(facecolor='green', arrowstyle='->'))
+    for x_pos in np.linspace(right_bound + 1, 9, 3):
+        ax.annotate("", xy=(x_pos + 0.5, np.real(psi3).max()), xytext=(x_pos, np.real(psi3).max()), arrowprops=dict(facecolor='red', arrowstyle='->'))
+    for x_pos in np.linspace(-9, left_bound - 1, 3):
+        ax.annotate("", xy=(x_pos - 0.5, np.real(psi_reflected).max()), xytext=(x_pos, np.real(psi_reflected).max()), arrowprops=dict(facecolor='purple', arrowstyle='<-'))
+
+    ax.set_title(f"Tunneling Effect for E = {E}")
+    ax.legend()
+    ax.set_ylim(-1, 6)
+    ax.set_xlim(-10, 10)
+    ax.set_xlabel("Position (x)")
+    ax.set_ylabel("Wave Amplitude / Potential")
+    canvas.draw()
+    energy_label.config(text=f"Current Energy Level: {E}")
+
+def next_energy_level():
+    global current_level
+    current_level = (current_level + 1) % len(E_levels)
+
+def increase_barrier():
+    global U
+    U += 1
+
+def decrease_barrier():
+    global U
+    if U > 1:
+        U -= 1
+
+def increase_width():
+    global barrier_width
+    barrier_width += 0.5
+
+def decrease_width():
+    global barrier_width
+    if barrier_width > 0.5:
+        barrier_width -= 0.5
+
+root = tk.Tk()
+root.title("Quantum Tunneling Simulation")
+root.geometry("1000x700")
+
+fig, ax = plt.subplots(figsize=(8, 5))
+canvas = FigureCanvasTkAgg(fig, master=root)
+canvas_widget = canvas.get_tk_widget()
+canvas_widget.pack(fill=tk.BOTH, expand=True)
+
+energy_label = ttk.Label(root, text=f"Current Energy Level: {E_levels[current_level]}", font=("Arial", 12))
+energy_label.pack(pady=5)
+
+button_energy = ttk.Button(root, text="Next Energy Level", command=next_energy_level)
+button_energy.pack(pady=5)
+
+button_increase = ttk.Button(root, text="Increase Barrier Height", command=increase_barrier)
+button_increase.pack(pady=5)
+
+button_decrease = ttk.Button(root, text="Decrease Barrier Height", command=decrease_barrier)
+button_decrease.pack(pady=5)
+
+button_increase_width = ttk.Button(root, text="Increase Barrier Width", command=increase_width)
+button_increase_width.pack(pady=5)
+
+button_decrease_width = ttk.Button(root, text="Decrease Barrier Width", command=decrease_width)
+button_decrease_width.pack(pady=5)
+
+ani = animation.FuncAnimation(fig, update_wave, frames=len(t_vals), interval=50, repeat=True)
+root.mainloop()
